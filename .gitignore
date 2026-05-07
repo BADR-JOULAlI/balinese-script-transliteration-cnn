@@ -1,0 +1,42 @@
+# Project data and model artifacts
+/data/
+*.h5
+*.ckpt
+*.pt
+*.pth
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Jupyter/IPython
+.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+
+# Virtual environments and local env files
+.venv/
+venv/
+env/
+ENV/
+.env
+.env.*
+!.env.example
+
+# Packaging/build outputs
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs and OS/editor metadata
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
