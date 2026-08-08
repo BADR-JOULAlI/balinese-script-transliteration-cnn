@@ -11,41 +11,35 @@ The goal of this project is to build a reproducible computer vision pipeline cap
 The current implementation provides:
 
 1. A PyTorch Lightning `BalineseDataModule` based on `torchvision.datasets.ImageFolder`.
-2. Reproducible train/validation/test splitting with an 80/10/10 ratio.
+2. Leakage-safe, source-grouped train/validation/test splits for DeepLontar.
 3. ImageNet-style preprocessing for transfer learning backbones.
-4. Dynamic image sizing for ResNet/VGG (`224x224`) and InceptionV3 (`299x299`).
+4. Configurable image sizing, including the evaluated ResNet18 `128x128` baseline.
 5. A dynamic `BalineseClassifier` LightningModule whose output layer is built from the detected number of classes.
-6. Recommended Lightning callbacks for checkpointing and early stopping.
+6. Reproducible preprocessing, training, evaluation, metrics, and executed notebooks.
 
 ## Structure
 
 ```text
 balinese-script-transliteration-cnn/
-├── data/
-│   ├── raw/                         # Local raw images, ignored by Git
-│   └── processed/                   # Local processed datasets, ignored by Git
-├── models/
-│   └── checkpoints/                 # Local model checkpoints, ignored by Git
+├── data/                             # Local datasets, ignored by Git
+├── models/checkpoints/               # Local checkpoints, ignored by Git
 ├── notebooks/
-│   ├── 01_data_ingestion.ipynb
-│   ├── 02_model_training.ipynb
-│   └── 03_evaluation.ipynb
+│   ├── 01_data_ingestion.ipynb       # YOLO ingestion, grouping and preprocessing
+│   ├── 02_model_training.ipynb       # ResNet18 training and learning curves
+│   └── 03_evaluation.ipynb           # Test metrics, plots and inference demo
 ├── reports/
-│   └── figures/                     # Evaluation plots and training figures
+│   ├── training_history.json         # Recorded learning curves
+│   └── test_metrics.json             # Per-class metrics and confusion matrix
 ├── src/
-│   ├── data/
-│   │   ├── __init__.py
-│   │   └── datamodule.py            # BalineseDataModule
-│   ├── models/
-│   │   ├── __init__.py
-│   │   ├── callbacks.py             # ModelCheckpoint and EarlyStopping helpers
-│   │   └── lightning_module.py      # BalineseClassifier LightningModule
-│   └── utils/
-│       └── data_loader.py           # Utility placeholder
-├── .gitignore
-├── LICENSE
-├── README.md
-└── requirements.txt
+│   ├── data/datamodule.py            # BalineseDataModule
+│   └── models/
+│       ├── callbacks.py              # Checkpoint and early stopping
+│       └── lightning_module.py       # BalineseClassifier
+├── prepare_deeplontar.py             # YOLO-to-classification conversion
+├── train.py                          # Training CLI
+├── evaluate.py                       # Evaluation CLI
+├── requirements.txt                  # Runtime and training dependencies
+└── requirements-notebook.txt         # Optional notebook dependencies
 ```
 
 ## Tech Stack
@@ -53,12 +47,12 @@ balinese-script-transliteration-cnn/
 The project dependencies are pinned in `requirements.txt`:
 
 - `lightning==2.5.1`
-- `torch==2.6.0`
-- `torchvision==0.21.0`
+- `torch==2.9.1`
+- `torchvision==0.24.1`
 - `kaggle==1.6.17`
 - `pandas==2.2.3`
 - `matplotlib==3.10.0`
-- `jupyter==1.1.1`
+- `pillow>=11.0,<13`
 
 ## Getting Started
 
@@ -92,6 +86,12 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+For the executed notebooks:
+
+```bash
+pip install -r requirements-notebook.txt
+```
+
 ## Data Layout
 
 The dataset must follow the `ImageFolder` convention:
@@ -123,8 +123,11 @@ The converter crops YOLO boxes, retains the declared class IDs, groups the
 original and enhanced copies of each manuscript page, and creates leakage-safe
 `train/val/test` folders. Enhanced copies are used only for training.
 
-For a detailed, reader-friendly walkthrough, open
-[`notebooks/04_deeplontar_end_to_end.ipynb`](notebooks/04_deeplontar_end_to_end.ipynb).
+The executed walkthrough is split by responsibility:
+
+1. [`01_data_ingestion.ipynb`](notebooks/01_data_ingestion.ipynb)
+2. [`02_model_training.ipynb`](notebooks/02_model_training.ipynb)
+3. [`03_evaluation.ipynb`](notebooks/03_evaluation.ipynb)
 
 ## DataModule Usage
 
@@ -146,19 +149,24 @@ inception_data_module = BalineseDataModule(data_dir="data/raw", backbone="incept
 import lightning as L
 
 from src.data import BalineseDataModule
-from src.models import build_model_from_datamodule, build_training_callbacks
+from src.models import BalineseClassifier, build_training_callbacks
 
-data_module = BalineseDataModule(data_dir="data/raw", backbone="resnet50", batch_size=32)
+data_module = BalineseDataModule(
+    data_dir="data/processed", backbone="resnet18", image_size=128, batch_size=128
+)
 data_module.setup()
 
-model = build_model_from_datamodule(
-    data_module=data_module,
-    backbone="resnet50",
-    learning_rate=1e-4,
+model = BalineseClassifier(
+    num_classes=data_module.num_classes,
+    backbone="resnet18",
+    learning_rate=3e-4,
 )
 
 trainer = L.Trainer(
-    max_epochs=30,
+    max_epochs=8,
+    accelerator="gpu",
+    devices=1,
+    precision="16-mixed",
     callbacks=build_training_callbacks("models/checkpoints"),
 )
 trainer.fit(model, datamodule=data_module)
