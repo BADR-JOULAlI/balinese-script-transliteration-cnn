@@ -36,6 +36,7 @@ dist/
 
 # Logs and OS/editor metadata
 *.log
+lightning_logs/
 .DS_Store
 Thumbs.db
 .vscode/
