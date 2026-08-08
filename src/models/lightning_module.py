@@ -77,6 +77,13 @@ class BalineseClassifier(L.LightningModule):
             model.fc = nn.Linear(in_features, num_classes)
             return model
 
+        if backbone == "resnet18":
+            weights = models.ResNet18_Weights.DEFAULT if pretrained else None
+            model = models.resnet18(weights=weights)
+            in_features = model.fc.in_features
+            model.fc = nn.Linear(in_features, num_classes)
+            return model
+
         if backbone == "inception_v3":
             weights = models.Inception_V3_Weights.DEFAULT if pretrained else None
             model = models.inception_v3(weights=weights, aux_logits=True)
@@ -87,4 +94,4 @@ class BalineseClassifier(L.LightningModule):
                 model.AuxLogits.fc = nn.Linear(aux_features, num_classes)
             return model
 
-        raise ValueError("backbone must be one of: vgg16, resnet50, inception_v3")
+        raise ValueError("backbone must be one of: vgg16, resnet18, resnet50, inception_v3")
