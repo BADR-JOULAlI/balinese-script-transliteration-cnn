@@ -109,6 +109,23 @@ data/raw/
 
 The entire `data/` directory is ignored by Git to prevent large datasets and local Kaggle downloads from being pushed.
 
+### DeepLontar preparation
+
+Download `DeepLontar.zip` and `DeepLontar_Labels.zip` from the official
+[Figshare record](https://doi.org/10.6084/m9.figshare.20103803.v2), extract them
+under `data/deeplontar/images` and `data/deeplontar/labels`, then run:
+
+```bash
+python prepare_deeplontar.py
+```
+
+The converter crops YOLO boxes, retains the declared class IDs, groups the
+original and enhanced copies of each manuscript page, and creates leakage-safe
+`train/val/test` folders. Enhanced copies are used only for training.
+
+For a detailed, reader-friendly walkthrough, open
+[`notebooks/04_deeplontar_end_to_end.ipynb`](notebooks/04_deeplontar_end_to_end.ipynb).
+
 ## DataModule Usage
 
 ```python
@@ -146,6 +163,31 @@ trainer = L.Trainer(
 )
 trainer.fit(model, datamodule=data_module)
 ```
+
+GPU training and evaluation example:
+
+```bash
+python train.py --data-dir data/processed --backbone resnet18 --image-size 128 \
+  --batch-size 128 --max-epochs 8 --accelerator gpu --devices 1
+python evaluate.py --checkpoint models/checkpoints/resnet18-128/<best-checkpoint>.ckpt
+```
+
+## Baseline Result
+
+The current ResNet18 baseline was trained on an RTX 5070 Laptop GPU with
+128x128 inputs and mixed precision. Evaluation uses 6,706 original character
+crops from manuscript groups that never occur in training.
+
+| Metric | Result |
+|---|---:|
+| Accuracy | 96.76% |
+| Macro precision | 92.74% |
+| Macro recall | 93.56% |
+| Macro F1 | 92.91% |
+
+The complete per-class metrics and confusion matrix are stored in
+[`reports/test_metrics.json`](reports/test_metrics.json). Rare classes remain
+the main limitation; they need additional independent manuscript samples.
 
 ## Reproducibility Notes
 
