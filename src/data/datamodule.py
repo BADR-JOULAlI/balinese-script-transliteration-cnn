@@ -7,7 +7,7 @@ from typing import Optional
 
 import lightning as L
 import torch
-from torch.utils.data import DataLoader, Subset, random_split
+from torch.utils.data import DataLoader, Dataset, Subset, random_split
 from torchvision import datasets, transforms
 
 
@@ -33,6 +33,7 @@ class BalineseDataModule(L.LightningDataModule):
         batch_size: int = 32,
         num_workers: int = 4,
         seed: int = 42,
+        image_size: int | None = None,
     ) -> None:
         super().__init__()
         self.data_dir = Path(data_dir)
@@ -42,11 +43,11 @@ class BalineseDataModule(L.LightningDataModule):
         self.seed = seed
 
         # InceptionV3 was trained with 299x299 inputs; VGG16/ResNet50 use 224x224.
-        self.target_size = 299 if self.backbone == "inception_v3" else 224
+        self.target_size = image_size or (299 if self.backbone == "inception_v3" else 224)
 
-        self.train_dataset: Optional[Subset] = None
-        self.val_dataset: Optional[Subset] = None
-        self.test_dataset: Optional[Subset] = None
+        self.train_dataset: Optional[Dataset] = None
+        self.val_dataset: Optional[Dataset] = None
+        self.test_dataset: Optional[Dataset] = None
         self.class_names: list[str] = []
         self.num_classes = 0
 
@@ -84,6 +85,18 @@ class BalineseDataModule(L.LightningDataModule):
                 "Expected class folders under data/raw/."
             )
 
+        split_dirs = {name: self.data_dir / name for name in ("train", "val", "test")}
+        if all(path.is_dir() for path in split_dirs.values()):
+            self.train_dataset = datasets.ImageFolder(split_dirs["train"], transform=self.train_transforms)
+            self.val_dataset = datasets.ImageFolder(split_dirs["val"], transform=self.eval_transforms)
+            self.test_dataset = datasets.ImageFolder(split_dirs["test"], transform=self.eval_transforms)
+            class_names = self.train_dataset.classes
+            if self.val_dataset.classes != class_names or self.test_dataset.classes != class_names:
+                raise ValueError("train/val/test must contain the same class folders.")
+            self.class_names = class_names
+            self.num_classes = len(class_names)
+            return
+
         base_dataset = datasets.ImageFolder(root=self.data_dir)
         train_dataset = datasets.ImageFolder(root=self.data_dir, transform=self.train_transforms)
         eval_dataset = datasets.ImageFolder(root=self.data_dir, transform=self.eval_transforms)
@@ -116,7 +129,7 @@ class BalineseDataModule(L.LightningDataModule):
     def test_dataloader(self) -> DataLoader:
         return self._build_dataloader(self.test_dataset, shuffle=False)
 
-    def _build_dataloader(self, dataset: Optional[Subset], shuffle: bool) -> DataLoader:
+    def _build_dataloader(self, dataset: Optional[Dataset], shuffle: bool) -> DataLoader:
         if dataset is None:
             raise RuntimeError("Call setup() before requesting a dataloader.")
 
